@@ -1,0 +1,604 @@
+_buildFruitCard(
+      String name, String asset, String rate, int color, int color2) {
+    return Container(
+      width: 42.5 * SizeConfig.widthMultiplier,
+      decoration: BoxDecoration(
+        color: Color(color),
+        borderRadius: BorderRadius.circular(20.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Align(
+            alignment: Alignment.topRight,
+            child: Container(
+              decoration: BoxDecoration(
+                  color: Color(color2),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(20.0),
+                    topRight: Radius.circular(20.0),
+                  )),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Icon(
+                  Icons.add,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Image.network(
+              asset ??
+                  'https://cleananddelicious.com/wp-content/uploads/2016/03/Avocad0-CD.jpg',
+              fit: BoxFit.contain,
+              height: 30 * SizeConfig.imageSizeMultiplier,
+              width: 30 * SizeConfig.imageSizeMultiplier,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 10.0, top: 10.0),
+            child: Text(
+              name,
+              style: TextStyle(
+                  fontFamily: 'OpenSans-Bold',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 2.5 * SizeConfig.textMultiplier),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 10.0, top: 10.0),
+            child: Text(
+              "Gurugram Mandi Haryana",
+              style: TextStyle(
+                  fontFamily: 'OpenSans-Bold',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 1.5 * SizeConfig.textMultiplier),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 10.0, right: 10.0, top: 10.0),
+            child: Row(
+              children: <Widget>[
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      rate,
+                      style: TextStyle(
+                          fontFamily: 'OpenSans',
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 2.5 * SizeConfig.textMultiplier),
+                    ),
+                    Text(
+                      "Per quintel",
+                      style: TextStyle(
+                          fontFamily: 'OpenSans',
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 1.3 * SizeConfig.textMultiplier),
+                    ),
+                  ],
+                ),
+                Spacer(),
+                Text(
+                  "View Prices",
+                  style: TextStyle(
+                      fontFamily: 'OpenSans',
+                      color: Colors.black87,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 1.3 * SizeConfig.textMultiplier),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 2 * SizeConfig.heightMultiplier,
+          )
+        ],
+      ),
+    );
+  }
+
+  import 'package:firebase_auth/firebase_auth.dart';
+import 'package:machineweb/model/models.dart';
+
+class AuthService {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  // create user obj based on firebase user
+  AppUser _userFromFirebaseUser(User user) {
+    return user != null ? AppUser(uid: user.uid) : null;
+  }
+
+  // auth change user stream
+  Stream<AppUser> get user {
+    return _auth.authStateChanges().map(_userFromFirebaseUser);
+  }
+
+  // sign in with email and password
+  Future signInWithEmailAndPassword(String email, String password) async {
+    try {
+      var result = await _auth.signInWithEmailAndPassword(
+          email: email, password: password);
+      User user = result.user;
+
+      return user;
+    } catch (error) {
+      print(error.toString());
+      return null;
+    }
+  }
+
+  // register with email and password
+  Future registerWithEmailAndPassword(String email, String password) async {
+    try {
+      var result = await _auth.createUserWithEmailAndPassword(
+          email: email, password: password);
+      User user = result.user;
+
+      user.sendEmailVerification();
+
+      return _userFromFirebaseUser(user);
+    } catch (error) {
+      print(error.toString());
+      return null;
+    }
+  }
+
+  bool isemailVarified() {
+    try {
+      return _auth.currentUser.emailVerified |
+          (_auth.currentUser.providerData[0].providerId == 'phone');
+    } catch (error) {
+      print(error.toString());
+      return null;
+    }
+  }
+
+  Future sendVarificationEmail() async {
+    try {
+      await _auth.currentUser.sendEmailVerification();
+    } catch (error) {
+      print(error.toString());
+      return null;
+    }
+  }
+
+  Future resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } catch (error) {
+      print(error.toString());
+      return null;
+    }
+  }
+
+  // sign out
+  Future signOut() async {
+    try {
+      return await _auth.signOut();
+    } catch (error) {
+      print(error.toString());
+      return null;
+    }
+  }
+
+  Future deleteProfile() async {
+    try {
+      return await _auth.currentUser.delete();
+    } catch (error) {
+      print(error.toString());
+      return null;
+    }
+  }
+}
+
+import 'package:flutter/material.dart';
+
+import 'package:machineweb/service/authservice.dart';
+import 'package:machineweb/shared/laading.dart';
+import 'package:machineweb/shared/style.dart';
+
+class Register extends StatefulWidget {
+  final Function toggleView;
+  Register({this.toggleView});
+
+  @override
+  _RegisterState createState() => _RegisterState();
+}
+
+class _RegisterState extends State<Register> {
+  final AuthService _auth = AuthService();
+  final _formKey = GlobalKey<FormState>();
+  String error = '';
+  bool loading = false;
+
+  // text field state
+  String email = '';
+  String password = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return loading
+        ? Loading()
+        : Scaffold(
+            appBar: AppBar(
+              title: Text('sign up'),
+              actions: [
+                FlatButton.icon(
+                  onPressed: () => widget.toggleView(),
+                  icon: Icon(
+                    Icons.person,
+                    color: Colors.white,
+                  ),
+                  label: Text('sign in',
+                      style: Theme.of(context).textTheme.bodyText2),
+                ),
+              ],
+            ),
+            body: SingleChildScrollView(
+              child: Center(
+                child: Form(
+                  key: _formKey,
+                  child: Padding(
+                    padding: const EdgeInsets.all(30.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        SizedBox(height: 100.0),
+                        Text('new to e-kushi?',
+                            style: Theme.of(context).textTheme.bodyText1),
+                        SizedBox(height: 7.0),
+                        Text('sign up to enjoy services'),
+                        SizedBox(height: 40.0),
+                        TextFormField(
+                          style: Theme.of(context).textTheme.bodyText2,
+                          decoration: textInputDecoration.copyWith(
+                              hintText: 'email',
+                              prefixIcon:
+                                  Icon(Icons.email, color: Colors.white)),
+                          validator: (val) =>
+                              val.isEmpty ? 'enter an email' : null,
+                          onChanged: (val) {
+                            setState(() => email = val.trim());
+                          },
+                        ),
+                        SizedBox(height: 30.0),
+                        TextFormField(
+                          style: Theme.of(context).textTheme.bodyText2,
+                          obscureText: true,
+                          decoration: textInputDecoration.copyWith(
+                              hintText: 'password',
+                              prefixIcon:
+                                  Icon(Icons.lock, color: Colors.white)),
+                          validator: (val) => val.length < 8
+                              ? 'enter a password 8+ chars long'
+                              : null,
+                          onChanged: (val) {
+                            setState(() => password = val);
+                          },
+                        ),
+                        SizedBox(height: 30.0),
+                        RaisedButton(
+                            child: Text('register',
+                                style: Theme.of(context).textTheme.button),
+                            onPressed: () async {
+                              if (_formKey.currentState.validate()) {
+                                setState(() => loading = true);
+                                dynamic result =
+                                    await _auth.registerWithEmailAndPassword(
+                                        email, password);
+                                if (result == null) {
+                                  setState(() {
+                                    loading = false;
+                                    error = 'please supply a valid email';
+                                  });
+                                }
+                              }
+                            }),
+                        SizedBox(height: 12.0),
+                        Text(error,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyText2
+                                .copyWith(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+  }
+}
+
+
+   firebase_core: ^0.5.2
+  firebase_auth: ^0.18.3
+  cloud_firestore: ^0.14.3
+  firebase_storage: ^5.0.1
+  provider: ^4.1.2
+  url_launcher: ^5.7.10
+  image_picker: ^0.6.7+14
+
+
+  <!-- The core Firebase JS SDK is always required and must be listed first -->
+  <script src="https://www.gstatic.com/firebasejs/8.2.7/firebase-app.js"></script>
+
+  <!-- TODO: Add SDKs for Firebase products that you want to use
+     https://firebase.google.com/docs/web/setup#available-libraries -->
+  <script src="https://www.gstatic.com/firebasejs/8.2.7/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.2.7/firebase-analytics.js"></script>
+
+
+  <script>
+    // Your web app's Firebase configuration
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    var firebaseConfig = {
+      apiKey: "AIzaSyDnQHWa8kr27P8b7VdOaM5reQNrDR_3Luc",
+      authDomain: "machine-e5a3f.firebaseapp.com",
+      databaseURL: "https://machine-e5a3f-default-rtdb.firebaseio.com",
+      projectId: "machine-e5a3f",
+      storageBucket: "machine-e5a3f.appspot.com",
+      messagingSenderId: "961680846838",
+      appId: "1:961680846838:web:6fbf83b721e884d740e1d7",
+      measurementId: "G-CRGZD17MHJ"
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    firebase.analytics();
+  </script>
+
+
+  import 'package:flutter/material.dart';
+import 'package:machineweb/service/authservice.dart';
+import 'package:machineweb/shared/laading.dart';
+
+import 'package:machineweb/shared/style.dart';
+
+class SignIn extends StatefulWidget {
+  final Function toggleView;
+  SignIn({this.toggleView});
+
+  @override
+  _SignInState createState() => _SignInState();
+}
+
+class _SignInState extends State<SignIn> {
+  final AuthService _auth = AuthService();
+  final _formKey = GlobalKey<FormState>();
+  String error = '';
+  bool loading = false;
+
+  // text field state
+  String email = '';
+  String password = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return loading
+        ? Loading()
+        : Scaffold(
+            appBar: AppBar(
+              title: Text('sign in'),
+              actions: [
+                FlatButton.icon(
+                  onPressed: () => widget.toggleView(),
+                  icon: Icon(
+                    Icons.person,
+                    color: Colors.white,
+                  ),
+                  label: Text('register',
+                      style: Theme.of(context).textTheme.bodyText2),
+                ),
+              ],
+            ),
+            body: SingleChildScrollView(
+              child: Center(
+                child: Form(
+                  key: _formKey,
+                  child: Padding(
+                    padding: const EdgeInsets.all(30.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        SizedBox(height: 100.0),
+                        Text('welcome to machine',
+                            style: Theme.of(context).textTheme.bodyText1),
+                        SizedBox(height: 7.0),
+                        Text('sign in to view prices and more'),
+                        SizedBox(height: 40.0),
+                        TextFormField(
+                          style: Theme.of(context).textTheme.bodyText2,
+                          decoration: textInputDecoration.copyWith(
+                              hintText: 'email',
+                              prefixIcon:
+                                  Icon(Icons.email, color: Colors.white)),
+                          validator: (val) =>
+                              val.isEmpty ? 'enter an email' : null,
+                          onChanged: (val) {
+                            setState(() => email = val.trim());
+                          },
+                        ),
+                        SizedBox(height: 30.0),
+                        TextFormField(
+                          style: Theme.of(context).textTheme.bodyText2,
+                          obscureText: true,
+                          decoration: textInputDecoration.copyWith(
+                              hintText: 'password',
+                              prefixIcon:
+                                  Icon(Icons.lock, color: Colors.white)),
+                          validator: (val) => val.length < 8
+                              ? 'enter a password 8+ chars long'
+                              : null,
+                          onChanged: (val) {
+                            setState(() => password = val);
+                          },
+                        ),
+                        Row(
+                          children: [
+                            Spacer(),
+                            TextButton(
+                              child: Text('forgot password?',
+                                  style: Theme.of(context).textTheme.bodyText2),
+                              onPressed: () {
+                                _showMyDialog();
+                                print('object');
+                              },
+                            )
+                          ],
+                        ),
+                        SizedBox(height: 30.0),
+                        RaisedButton(
+                            child: Text('sign in',
+                                style: Theme.of(context).textTheme.button),
+                            onPressed: () async {
+                              if (_formKey.currentState.validate()) {
+                                setState(() => loading = true);
+                                dynamic result =
+                                    await _auth.signInWithEmailAndPassword(
+                                        email, password);
+                                if (result == null) {
+                                  setState(() {
+                                    loading = false;
+                                    error =
+                                        'could not sign in with those credentials';
+                                  });
+                                }
+                              }
+                            }),
+                        SizedBox(height: 12.0),
+                        Text(error,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyText2
+                                .copyWith(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+  }
+
+  Future<void> _showMyDoneDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // user must tap button!
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Check your email'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('check email for a link'),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text(
+                'back',
+                style: TextStyle(color: Colors.white),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showMyDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // user must tap button!
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Enter your email'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                TextFormField(
+                  style: Theme.of(context).textTheme.bodyText2,
+                  decoration: textInputDecoration.copyWith(
+                      hintText: 'email',
+                      prefixIcon: Icon(Icons.email, color: Colors.white)),
+                  validator: (val) => val.isEmpty ? 'enter an email' : null,
+                  onChanged: (val) {
+                    setState(() => email = val.trim());
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text(
+                'send email',
+                style: TextStyle(color: Colors.white),
+              ),
+              onPressed: () {
+                AuthService().resetPassword(email);
+                Navigator.of(context).pop();
+                _showMyDoneDialog();
+              },
+            ),
+            TextButton(
+              child: Text(
+                'cancel',
+                style: TextStyle(color: Colors.white),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+
+import 'package:flutter/material.dart';
+import 'package:machineweb/screens/admin/userside/beforesign%20in/regester.dart';
+import 'package:machineweb/screens/admin/userside/beforesign%20in/sign.dart';
+
+class Authenticate extends StatefulWidget {
+  static String route = '\authroute';
+  @override
+  _AuthenticateState createState() => _AuthenticateState();
+}
+
+class _AuthenticateState extends State<Authenticate> {
+  bool showSignIn = true;
+  void toggleView() {
+    //print(showSignIn.toString());
+    setState(() => showSignIn = !showSignIn);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (showSignIn) {
+      return SignIn(toggleView: toggleView);
+    } else {
+      return Register(toggleView: toggleView);
+    }
+  }
+}
+
+
+final user = Provider.of<AppUser>(context);
+ if(user==null){
+
+              }else{
+              print("");
+              Navigator.pushNamed(context, Authenticate.route);
+            }
+
